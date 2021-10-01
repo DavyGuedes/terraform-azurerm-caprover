@@ -1,6 +1,6 @@
 output "vm_ids" {
   description = "Virtual machine ids created."
-  value       = concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_virtual_machine.vm-linux.*.id)
+  value       = concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_linux_virtual_machine.vm-linux.*.id)
 }
 
 output "network_security_group_id" {
@@ -45,10 +45,10 @@ output "availability_set_id" {
 
 output "vm_zones" {
   description = "map with key `Virtual Machine Id`, value `list of the Availability Zone` which the Virtual Machine should be allocated in."
-  value       = zipmap(concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_virtual_machine.vm-linux.*.id), concat(azurerm_virtual_machine.vm-windows.*.zones, azurerm_virtual_machine.vm-linux.*.zones))
+  value       = zipmap(concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_linux_virtual_machine.vm-linux.*.id), concat(azurerm_virtual_machine.vm-windows.*.zones, azurerm_linux_virtual_machine.vm-linux.*.zones))
 }
 
 output "vm_identity" {
   description = "map with key `Virtual Machine Id`, value `list of identity` created for the Virtual Machine."
-  value       = zipmap(concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_virtual_machine.vm-linux.*.id), concat(azurerm_virtual_machine.vm-windows.*.identity, azurerm_virtual_machine.vm-linux.*.identity))
+  value       = zipmap(concat(azurerm_virtual_machine.vm-windows.*.id, azurerm_linux_virtual_machine.vm-linux.*.id), concat(azurerm_virtual_machine.vm-windows.*.identity, azurerm_linux_virtual_machine.vm-linux.*.identity))
 }
