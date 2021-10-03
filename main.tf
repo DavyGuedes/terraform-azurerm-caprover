@@ -78,15 +78,15 @@ resource "azurerm_linux_virtual_machine" "vm-linux" {
   dynamic "admin_ssh_key" {
     for_each = var.enable_ssh_key ? local.ssh_keys : []
     content {
-      username = var.admin_username
-      public_key = file(ssh_keys.value)
+      username   = var.admin_username
+      public_key = file(local.ssh_keys[count.index])
     }
   }
 
   dynamic "admin_ssh_key" {
     for_each = var.enable_ssh_key ? var.ssh_key_values : []
     content {
-      username = var.admin_username
+      username   = var.admin_username
       public_key = ssh_keys.value
     }
   }
@@ -107,101 +107,21 @@ resource "azurerm_linux_virtual_machine" "vm-linux" {
   boot_diagnostics {
     storage_account_uri = var.boot_diagnostics ? join(",", azurerm_storage_account.vm-sa.*.primary_blob_endpoint) : ""
   }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cloud-init status --wait"
+    ]
+    connection {
+      type     = "ssh"
+      host     = self.public_ip_address
+      user     = var.admin_username
+      private_key = file(var.ssh_private_key)
+      port     = var.remote_port
+    }
+  }
 }
 
-
-resource "azurerm_virtual_machine" "vm-windows" {
-  count                         = (var.is_windows_image || contains(tolist([var.vm_os_simple, var.vm_os_offer]), "WindowsServer")) ? var.nb_instances : 0
-  name                          = "${var.vm_hostname}-vmWindows-${count.index}"
-  resource_group_name           = data.azurerm_resource_group.vm.name
-  location                      = coalesce(var.location, data.azurerm_resource_group.vm.location)
-  availability_set_id           = azurerm_availability_set.vm.id
-  vm_size                       = var.vm_size
-  network_interface_ids         = [element(azurerm_network_interface.vm.*.id, count.index)]
-  delete_os_disk_on_termination = var.delete_os_disk_on_termination
-  license_type                  = var.license_type
-
-  dynamic "identity" {
-    for_each = length(var.identity_ids) == 0 && var.identity_type == "SystemAssigned" ? [var.identity_type] : []
-    content {
-      type = var.identity_type
-    }
-  }
-
-  dynamic "identity" {
-    for_each = length(var.identity_ids) > 0 || var.identity_type == "UserAssigned" ? [var.identity_type] : []
-    content {
-      type         = var.identity_type
-      identity_ids = length(var.identity_ids) > 0 ? var.identity_ids : []
-    }
-  }
-
-  storage_image_reference {
-    id        = var.vm_os_id
-    publisher = var.vm_os_id == "" ? coalesce(var.vm_os_publisher, module.os.calculated_value_os_publisher) : ""
-    offer     = var.vm_os_id == "" ? coalesce(var.vm_os_offer, module.os.calculated_value_os_offer) : ""
-    sku       = var.vm_os_id == "" ? coalesce(var.vm_os_sku, module.os.calculated_value_os_sku) : ""
-    version   = var.vm_os_id == "" ? var.vm_os_version : ""
-  }
-
-  storage_os_disk {
-    name              = "${var.vm_hostname}-osdisk-${count.index}"
-    create_option     = "FromImage"
-    caching           = "ReadWrite"
-    managed_disk_type = var.storage_account_type
-  }
-
-  dynamic "storage_data_disk" {
-    for_each = range(var.nb_data_disk)
-    content {
-      name              = "${var.vm_hostname}-datadisk-${count.index}-${storage_data_disk.value}"
-      create_option     = "Empty"
-      lun               = storage_data_disk.value
-      disk_size_gb      = var.data_disk_size_gb
-      managed_disk_type = var.data_sa_type
-    }
-  }
-
-  dynamic "storage_data_disk" {
-    for_each = var.extra_disks
-    content {
-      name              = "${var.vm_hostname}-extradisk-${count.index}-${storage_data_disk.value.name}"
-      create_option     = "Empty"
-      lun               = storage_data_disk.key + var.nb_data_disk
-      disk_size_gb      = storage_data_disk.value.size
-      managed_disk_type = var.data_sa_type
-    }
-  }
-
-  os_profile {
-    computer_name  = "${var.vm_hostname}-${count.index}"
-    admin_username = var.admin_username
-    admin_password = var.admin_password
-  }
-
-  tags = var.tags
-
-  os_profile_windows_config {
-    provision_vm_agent = true
-  }
-
-  dynamic "os_profile_secrets" {
-    for_each = var.os_profile_secrets
-    content {
-      source_vault_id = os_profile_secrets.value["source_vault_id"]
-
-      vault_certificates {
-        certificate_url   = os_profile_secrets.value["certificate_url"]
-        certificate_store = os_profile_secrets.value["certificate_store"]
-      }
-    }
-  }
-
-  boot_diagnostics {
-    enabled     = var.boot_diagnostics
-    storage_uri = var.boot_diagnostics ? join(",", azurerm_storage_account.vm-sa.*.primary_blob_endpoint) : ""
-  }
-}
 
 resource "azurerm_availability_set" "vm" {
   name                         = "${var.vm_hostname}-avset"
@@ -229,7 +149,7 @@ data "azurerm_public_ip" "vm" {
   count               = var.nb_public_ip
   name                = azurerm_public_ip.vm[count.index].name
   resource_group_name = data.azurerm_resource_group.vm.name
-  depends_on          = [azurerm_linux_virtual_machine.vm-linux, azurerm_virtual_machine.vm-windows]
+  depends_on          = [azurerm_linux_virtual_machine.vm-linux]
 }
 
 resource "azurerm_network_security_group" "vm" {
@@ -256,6 +176,35 @@ resource "azurerm_network_security_rule" "vm" {
   network_security_group_name = azurerm_network_security_group.vm.name
 }
 
+resource "azurerm_network_security_rule" "vm-caprover_tcp_inbound_ports" {
+  name                        = "allow_caprover_tcp_inbound_ports"
+  resource_group_name         = data.azurerm_resource_group.vm.name
+  description                 = "Allow TCP protocol in from all locations"
+  priority                    = 102
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges      = split(",", "80,443,3000,996,7946,4789,2377")
+  source_address_prefixes     = var.source_address_prefixes
+  destination_address_prefix  = "*"
+  network_security_group_name = azurerm_network_security_group.vm.name
+}
+
+resource "azurerm_network_security_rule" "vm-caprover_udp_inbound_ports" {
+  name                        = "allow_caprover_udp_inbound_ports"
+  resource_group_name         = data.azurerm_resource_group.vm.name
+  description                 = "Allow UDP protocol in from all locations"
+  priority                    = 103
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_ranges      = split(",", "7946,4789,2377")
+  source_address_prefixes     = var.source_address_prefixes
+  destination_address_prefix  = "*"
+  network_security_group_name = azurerm_network_security_group.vm.name
+}
 resource "azurerm_network_interface" "vm" {
   count                         = var.nb_instances
   name                          = "${var.vm_hostname}-nic-${count.index}"
@@ -277,4 +226,18 @@ resource "azurerm_network_interface_security_group_association" "test" {
   count                     = var.nb_instances
   network_interface_id      = azurerm_network_interface.vm[count.index].id
   network_security_group_id = azurerm_network_security_group.vm.id
+}
+
+data "azurerm_dns_zone" "dns_zone" {
+  name                = var.dns_zone_name
+  resource_group_name = var.dns_zone_resource_group
+}
+
+resource "azurerm_dns_a_record" "dns_a_record" {
+  count               = var.nb_public_ip
+  name                = azurerm_linux_virtual_machine.vm-linux[count.index].name
+  zone_name           = data.azurerm_dns_zone.dns_zone.name
+  resource_group_name = data.azurerm_dns_zone.dns_zone.resource_group_name
+  ttl                 = 3600
+  records             = [data.azurerm_public_ip.vm[count.index].ip_address]
 }

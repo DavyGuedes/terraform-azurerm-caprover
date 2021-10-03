@@ -38,6 +38,12 @@ variable "ssh_key" {
   default     = "~/.ssh/id_rsa.pub"
 }
 
+variable "ssh_private_key" {
+  description = "Path to the pprivate key to be used for ssh access to the VM. Only used with non-Windows vms and can be left as-is even if using Windows vms. If specifying a path to a certification on a Windows machine to provision a linux vm use the / in the path versus backslash. e.g. c:/home/id_rsa.pub."
+  type        = string
+  default     = "~/.ssh/id_rsa"
+}
+
 variable "ssh_key_values" {
   description = "List of Public SSH Keys values to be used for ssh access to the VMs."
   type        = list(string)
@@ -246,3 +252,20 @@ variable "os_profile_secrets" {
   type        = list(map(string))
   default     = []
 }
+
+variable "has_custom_dns" {
+  type        = bool
+  default     = false
+  description = "Specifies if there is a custom DNS"
+}
+
+variable "dns_zone_name" {
+  type        = string
+  description = "DNS zone resource name"
+}
+
+variable "dns_zone_resource_group" {
+  type        = string
+  description = "Resource group of the DNS zone resource"
+}
+
