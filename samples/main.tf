@@ -22,6 +22,8 @@ module "linuxservers" {
   source_address_prefixes = var.source_address_prefixes
   custom_data             = base64encode(data.template_file.cloud-init.rendered)
 
+  vm_size                 = var.vm_size
+
   depends_on = [azurerm_resource_group.example]
 }
 

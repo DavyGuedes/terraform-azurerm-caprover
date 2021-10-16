@@ -1,5 +1,5 @@
 #!/bin/bash -x
-#!/bin/bash
+
 sudo apt-get install -y \
     apt-transport-https \
     ca-certificates \
@@ -13,7 +13,7 @@ sudo add-apt-repository \
    stable"
 sudo apt-get update
 sudo apt-get install -y docker-ce
-sudo docker run hello-world
+
 # Linux post-install
 # sudo groupadd docker
 # sudo usermod -aG docker $USER

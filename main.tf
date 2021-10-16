@@ -241,3 +241,12 @@ resource "azurerm_dns_a_record" "dns_a_record" {
   ttl                 = 3600
   records             = [data.azurerm_public_ip.vm[count.index].ip_address]
 }
+
+resource "azurerm_dns_a_record" "dns_a_record_subdomain" {
+  count               = var.nb_public_ip
+  name                = "*.${azurerm_linux_virtual_machine.vm-linux[count.index].name}"
+  zone_name           = data.azurerm_dns_zone.dns_zone.name
+  resource_group_name = data.azurerm_dns_zone.dns_zone.resource_group_name
+  ttl                 = 3600
+  records             = [data.azurerm_public_ip.vm[count.index].ip_address]
+}

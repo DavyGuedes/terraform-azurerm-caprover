@@ -35,3 +35,9 @@ variable "remote_port" {
   type        = string
   default     = ""
 }
+
+variable "vm_size" {
+  description = "Specifies the size of the virtual machine."
+  type        = string
+  default     = "Standard_D2s_v3"
+}
